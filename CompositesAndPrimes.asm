@@ -1,10 +1,6 @@
-TITLE Program #4 Composite Numbers    (Project04.asm)
+TITLE Composite Numbers  
 
 ; Author:					Robert Jones
-; Last Modified:			April 30, 2019
-; OSU email address:		jonesro4@oregonstate.edu
-; Course number/section:	CS 271-400
-; Project Number:           4      Due Date: May 12, 2019
 ; Description:				This program calculates composite numbers. The user is asked how many 
 ;							composite numbers [1...400]. The program then calculates and displays 
 ;							all of the composite numbers up to and including the nth number. 
