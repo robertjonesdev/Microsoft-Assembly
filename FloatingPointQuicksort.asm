@@ -1,10 +1,6 @@
-TITLE  Program #5    (Proj05.asm)
+TITLE  Floating Point Quicksort
 
 ; Author:						Robert Jones
-; Last Modified:				May 18, 2019
-; OSU email address:			jonesro4@oregonstate.edu
-; Course number/section:		CS 271-400
-; Project Number:               5   Due Date: May 26, 2019 11:59PM
 ; Description:					This program accepts an integer from the user and creates a list of random floating-point numbers
 ;								in the amount of the user's integer. The program displays the random list. Then the program sorts the
 ;								list in descending order using the recursive quicksort algorithm. Then the program identifies and displays
