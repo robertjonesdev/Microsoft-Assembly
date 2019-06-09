@@ -1,17 +1,23 @@
-TITLE System Input/Output with Win32 API
+TITLE Program 6a System Input/Output  
 
 ; Author:					Robert Jones
 ; Description:				This program receives 10 character strings from the user
-;							and validates the input to be compatable as a 32-bit signed integer
-;							The program converts the strings to 32-bit signed integers and saves
-;							them to an array. The program then displays the numbers (back as strings),
-;							their sum, and their average (rounded down) as strings using the Win32 API calls.
-
+;					and validates the input to be compatable as a 32-bit signed integer
+;					The program converts the strings to 32-bit signed integers and saves
+;					them to an array. The program then displays the numbers (back as strings),
+;					their sum, and their average (rounded down) as strings using the Win32 API calls.
+;Extra credit:				**EC #1: Number each line of user input and display a running subtotal of the user’s numbers
+;					**EC #2: ReadVal and WriteVal can handle signed 32-bit integers (first character being '-' for negative, do not use '+')
+;					**EC #5: getString and displayString macros are implemented using the Win32 API console functions (Canvas Announcement)
+;
+;Source cite: Kip Irvine Assembly Language Chapter 10.2 "Macros Containing Code and Data"
+;Source cite: Console inpput/output Kip Irvine Assembly Ch 11.1 Win-32 Console Programming
 
 ;Constant definitions
 INCLUDE Irvine32.inc
 NUMELEM = 10
 ENDL	EQU <0dh, 0ah>
+
 
 ;******************************************************************************************
 ; displayString Macro
@@ -53,35 +59,30 @@ ENDM
 ; getString Macro
 ; Description:			This macro displays a prompt to ask the user for input. It then reads
 ;						this console using the Win32 API up to the defined buffer size.
-; Receives:				Address to start of input buffer array, maximum size of buffer, and
+; Receives:				Address to start of input buffer array, retrun, and reference for number of characters read.
 ;						the address to start of a prompt message string.
-; Returns:				Returns the input character string as a reference parameter of buffer.
+; Returns:				Returns the input character string as a reference parameter of buffer, and the number of characters read.
 ; Preconditions:		buffer and maximum size of buffer is a sufficient amount to receive expected string
 ; Registers affected:	None.
 ;*********************************************************************************************
-getString MACRO buffer, bufferSize, prompt
+getString MACRO buffer, bufferCount, prompt
 	pushad
 
 	displayString prompt
-	mov		edx, 0
-	push	edx
-	lea		edx, DWORD PTR [esp]				;; return value for number of bytes written
 
 	INVOKE	GetStdHandle, STD_INPUT_HANDLE		;; handle is saved to eax
 	INVOKE	ReadConsole,						;; Win32 API Call
 			eax,								;; console input handle
 			buffer,								;; address to beginning of array to store string
-			bufferSize,							;; buffer maximum
-			edx,								;; return value of number of bytes read
+			80,									;; buffer maximum
+			bufferCount,						;; return value of number of bytes read
 			0									;; not used
-	pop		esi									;; Remove cariage return (last 2 bytes) and replace with null character
-	mov		edi, buffer
-	add		edi, esi
-	dec		edi
-	mov		eax, 0
-	mov		[edi], eax
-	dec		edi
-	mov		[edi], eax
+	
+	mov		ebx, bufferCount
+	mov		eax, [ebx]
+	sub		eax, 2
+	mov		[ebx], eax
+
 	popad
 ENDM
 
@@ -94,9 +95,8 @@ intro1		BYTE	"PROGRAMMING ASSIGNMENT 6a: Designing low-level I/O procedures", EN
 intro2		BYTE	"Please provide 10 signed decimal integers.  Each number needs to be small enough to fit inside a 32 ", ENDL
 			BYTE	"bit register. After you have finished inputting the raw numbers I will display a list of the integers, ", ENDL
 			BYTE	"their sum, and their average value. ", ENDL, ENDL, 0
-ecMsg		BYTE	"**EC #1: Number each line of user input and display a running subtotal of the user’s numbers", ENDL
+ecMsg		BYTE	"**EC #1: Number each line of user input and display a running subtotal of the users numbers", ENDL
 			BYTE	"**EC #2: ReadVal and WriteVal can handle signed 32-bit integers (first character being '-')", ENDL
-			BYTE	"**EC #3: ReadVal procedure is recursive.", ENDL
 			BYTE	"**EC #5: getString and displayString macros are implemented using the Win32 API console functions (Canvas Announcement)", ENDL, ENDL, 0
 prompt		BYTE	" Please enter a signed integer: ", 0
 promptError	BYTE	"  ERROR: You did not enter a valid signed integer, or your number was too big.", ENDL, "  Please try again: ", 0
@@ -107,44 +107,38 @@ avgMsg		BYTE	"The average is: ", 0
 endMsg		BYTE	"Thanks for playing!", ENDL, ENDL, 0
 strSpacer	BYTE	", ", 0
 inputString	BYTE	80 DUP(0), 0, 0
+inStringSize DWORD	?
+outputString BYTE	80 DUP(0), 0, 0
 
 ;Procedures
 .code
 main PROC
-	displayString OFFSET intro1
-	displayString OFFSET intro2
-	displayString OFFSET ecMsg
+	push	 OFFSET intro1
+	push	 OFFSET intro2
+	push	 OFFSET ecMsg
+	call	Introduction
 
+	push	OFFSET outputString
 	push	OFFSET runningMsg
 	push	OFFSET promptError
 	push	OFFSET prompt
-	push	DWORD PTR SIZEOF inputString
+	push	OFFSET inStringSize
 	push	OFFSET inputString
 	push	OFFSET numArray
 	call	GetNums												;Procedure to get 10 strings from console and save as signed 32-bit integers in array
 
-	displayString OFFSET newLine
-	displayString OFFSET listMsg
-
-	push	OFFSET strSpacer
+	push	OFFSET outputString
 	push	OFFSET numArray
 	call	DisplayArray										;Display all the numbers received in previous procedure
 
-	displayString OFFSET sumMsg
-
-	push	OFFSET sum
-	push	OFFSET numArray
-	call	GetSum												;Calculate the sum of the array elements, return by reference to sum variable.
-
-	displayString OFFSET newLine
-
+	push	OFFSET outputString
 	push	OFFSET avgMsg
-	push	sum
-	Call	GetAvg												;Calculate the average based on the sum / elements
+	push	OFFSET sumMsg
+	push	OFFSET numArray
+	call	GetSumAndAverage									;Calculate the sum of the array elements and their average.
 
-	displayString OFFSET newLine
-	displayString OFFSET newLine
-	displayString OFFSET endMsg									;End of program message
+	push	OFFSET endMsg										;End of program message
+	call	Farewell
 
 	exit
 main ENDP
@@ -155,7 +149,7 @@ main ENDP
 ;							32-bit signed integers to store in the number array.
 ; Receives:					Base pointer to the number array, base pointer to the string buffer,
 ;							maximum size of the string buffer, prompt string message, error 
-;							prompt string message, and running total string message.
+;							prompt string message, and running total string message, output string used for WriteVal
 ; Returns:					Returns the number array populated by received and validated 32-bit signed integers.
 ; Preconditions:			None.
 ; Registers affected:		None.
@@ -164,31 +158,32 @@ GetNums PROC
 	push	ebp
 	mov		ebp, esp
 	pushad
-	mov		eax, [ebp+16]
-	sub		eax, 2
-	mov		[ebp+16], eax
 
-	mov		eax, 0									;Accumulator for running subtotal
-	mov		ebx, 1									;Line counter
-	mov		edi, [ebp+8]							;base pointer of number array
+	mov		eax, 0							;Accumulator for running subtotal
+	mov		ebx, 1							;Line counter
+	mov		edi, [ebp+8]						;base pointer of number array
 
-	displayString OFFSET newLine
-GetNumLoop:											;Get 10 strings and store as 32-bit signed integers
-	push	DWORD PTR ebx
+	call	Crlf
+GetNumLoop:									;Get 10 strings and store as 32-bit signed integers
+	push	[ebp+32]
+	push	SDWORD PTR ebx
 	call	WriteVal
 
-	push	edi
+	push	SDWORD PTR edi							;return value for signed 32-bit integer
 	push	DWORD PTR [ebp+24]						;promptError string message
 	push	DWORD PTR [ebp+20]						;prompt string message
-	push	DWORD PTR [ebp+16]						;size of inputString for buffer maximum
+	push	DWORD PTR [ebp+16]						;return value of inputString for buffer maximum
 	push	DWORD PTR [ebp+12]						;inputString buffer array of characters
 	call	ReadVal
 
 	add		eax, [edi]
-	displayString [ebp+28]							;runningMsg string message
-	push	DWORD PTR eax
+
+	displayString [ebp+28]
+	push	[ebp+32]
+	push	SDWORD PTR eax
 	call	WriteVal
-	displayString OFFSET newLine
+	call	Crlf
+
 	add		edi, TYPE DWORD
 	inc		ebx
 	cmp		ebx, NUMELEM
@@ -197,35 +192,41 @@ GetNumLoop:											;Get 10 strings and store as 32-bit signed integers
 	popad
 	mov		esp, ebp
 	pop		ebp
-	ret		24
+	ret		28
 GetNums ENDP
 
 ;******************************************************************************************
 ; DisplayArray
 ; Description:				This procedure prints out each element of an integer array to the console.
-; Receives:					Base pointer to the beginning of an integer array, and string spacer message ", "
-; Returns:					None.
+; Receives:				Base pointer to the beginning of an integer array, and output string array used for WriteVal
+; Returns:				None.
 ; Preconditions:			Array is populated with valid 32-bit signed integers.
-; Registers affected:		None.
+; Registers affected:			None.
 ;*********************************************************************************************
 DisplayArray PROC
 	push	ebp
 	mov		ebp, esp
 	pushad
 
+	displayString OFFSET newLine	
+	displayString OFFSET newLine
+	displayString OFFSET listMsg
+
 	mov		ecx, NUMELEM
-	mov		edi, [ebp+8]						;Reference to SDWORD numArray
+	mov		edi, [ebp+8]					;Reference to SDWORD numArray
 DisplayLoop:
+	push	[ebp+12]
 	mov		eax, [edi]
-	push	DWORD PTR eax
-	call	WriteVal							;Display each of all numbers
+	push	SDWORD PTR eax
+	call	WriteVal						;Display each of all numbers
+
 	cmp		ecx, 1
 	jz		NoStringSpacer
-	displayString [ebp+12]						;strSpacer string message ", "
+	displayString OFFSET strSpacer					;strSpacer string message ", "
 NoStringSpacer:
-	add		edi, TYPE DWORD
+	add		edi, 4
 	loop	DisplayLoop
-	displayString OFFSET newLine
+	call	Crlf
 
 	popad
 	mov		esp, ebp
@@ -234,18 +235,19 @@ NoStringSpacer:
 DisplayArray ENDP
 
 ;******************************************************************************************
-; GetSum
-; Description:				This procedure calculates the sum of all elements in an integer array.
-; Receives:					Base pointer to the beginning of an integer array, and reference variable
-;							to return the sum.  It also prints out the sum to the terminal console.
-; Returns:					Returns the sum of the array through the reference variable.
-; Preconditions:			Array is populated with valid 32-bit signed integers.
+; GetSumAndAverage
+; Description:			This procedure calculates the sum of all elements in an integer array.
+;				It then divides it by the total number of numbers for the avarege.
+; Receives:			Base pointer to the beginning of an integer array, and 2 string for sum and array messages
+; Returns:			None.
+; Preconditions:		Array is populated with valid 32-bit signed integers.
 ; Registers affected:		None.
 ;*********************************************************************************************
-GetSum PROC
+GetSumAndAverage PROC
 	push	ebp
 	mov		ebp, esp
 	pushad
+	displayString [ebp+12]
 	mov		ecx, NUMELEM
 	mov		edi, [ebp+8]						;base of numArray
 	mov		eax, 0
@@ -253,113 +255,87 @@ AdderLoop:
 	add		eax, [edi]
 	add		edi, TYPE DWORD
 	loop	AdderLoop
-	push	DWORD PTR eax
+
+	push	[ebp+20]
+	push	SDWORD PTR eax
 	call	WriteVal							;Sum of all numbers
-
-	mov		ebx, [ebp+12]
-	mov		[ebx], eax							;return sum to reference paramater
-	popad
-	mov		esp, ebp
-	pop		ebp
-	ret		8
-GetSum ENDP
-
-;******************************************************************************************
-; GetAverage
-; Description:				This procedure calculates the average of the elements in the array.
-;							It then prints the integer value to the console.
-; Receives:					The sum of the array by value and a string message.
-; Returns:					None.
-; Preconditions:			Sum is a valid 32-bit signed integer
-; Registers affected:		None.
-;*********************************************************************************************
-GetAvg PROC
-	push	ebp
-	mov		ebp, esp
-	pushad
-	displayString	[ebp+12]
-
-	mov		eax, [ebp+8]						;sum
-	cdq
+	call	Crlf
+	displayString [ebp+16]
 	mov		ebx, NUMELEM
+	cdq
 	idiv	ebx
-	push	DWORD PTR eax
+
+	push	[ebp+20]
+	push	SDWORD PTR eax
 	call	WriteVal							;Average of all numbers
 
+	call	Crlf
 	popad
 	mov		esp, ebp
 	pop		ebp
-	ret		4
-GetAvg ENDP
+	ret		12
+GetSumAndAverage ENDP
+
 
 ;******************************************************************************************
 ; RealVal
 ; Description:				This procedure takes user console input using the getString macro
-;							and Win32 API calls. It validates and converts the character string
-;							in to a 32-bit signed integer and then returns integer value.
-;							If input is invalid, the procedure will recursively call itself
-;							until valid, in range, input is given.
-; Receives:					Reference to a character array, maximum size of the array,
-;							standard message prompt (string), and message prompt for error (string)
-;							Reference to a 32-bit signed integer for return value
-; Returns:					32-bit signed integer through reference variable
+;					and Win32 API calls. It validates and converts the character string
+;					in to a 32-bit signed integer and then returns integer value.
+;					if input is invalid, the procedure will loop
+;					until valid, in range, input is given.
+; Receives:				Reference to a character array, maximum size of the array,
+;					standard message prompt (string), and message prompt for error (string)
+;					Reference to a 32-bit signed integer for return value
+; Returns:				32-bit signed integer through reference variable
 ; Preconditions:			None.
 ; Registers affected:		None.
 ;*********************************************************************************************
 ReadVal PROC
 	push	ebp
 	mov		ebp, esp
-	sub		esp, 8
+	sub		esp, 4
 	pushad
-
-	getString DWORD PTR [ebp+8], DWORD PTR [ebp+12], DWORD PTR [ebp+16]
 GetStringLoop:
-	lea		eax, [ebp-4]
-	push	eax
-	push	SDWORD PTR [ebp+8]
-	call	StringLength					;get the length of the input string, stored in [ebp-4]
+	getString DWORD PTR [ebp+8], DWORD PTR [ebp+12], DWORD PTR [ebp+16]
 
-	mov		ecx, [ebp-4]
+	mov		edi, [ebp+12]
+	mov		ecx, [edi]						;length of string
+	mov		eax, ecx
 	cmp		ecx, 0
 	jz		StringHasError					;check for empty string
 	mov		esi, [ebp+8]					;string base pointer
 	cld
 	lodsb
+
 	cmp		al, 45							;check first character for negative
 	jne		SignIsPositive
 	mov		eax, -1
-	mov		[ebp-8], eax					;sign is negative, save to multiply to value at the end
-	mov		eax, [ebp-4]					;reduce string length by 1 to exclude the sign.
+	mov		[ebp-4], eax					;sign is negative, save to multiply to value at the end
+	mov		eax, [edi]						;reduce string length by 1 to exclude the sign.
 	dec		eax
-	mov		[ebp-4], eax
+	mov		[edi], eax
 	jmp		SignIsNegative
 SignIsPositive:
 	mov		eax, 1
-	mov		[ebp-8], eax
+	mov		[ebp-4], eax
 	mov		esi, [ebp+8]
 SignIsNegative:
-	mov		ecx, [ebp-4]					;loop counter = length of string
-	mov		eax, 0
+	mov		ecx, [edi]						;loop counter = length of string
+
+	add		esi, ecx
+	dec		esi
+	mov		ebx, 1							;place value multiplier
 FindInvalidChars:							;iterate through character string for any invalid characters
-	cld
+	mov		eax, 0
+	std
 	lodsb
-	cmp		al, 0							;null character, end of string
-	je		EndOfStringFound
 	cmp		al, 48							;below decimal 0
 	jl		StringHasError
 	cmp		al, 57							;greater than decimal 9
 	jg		StringHasError
-	loop	FindInvalidChars
-EndOfStringFound:							;calculate real value of whole numbers.
-	dec		esi								;start before the null character
-	mov		ecx, [ebp - 4]					;loop counter = length of string
-	mov		ebx, 1							;place value multiplier
-CalculateIntValue:
-	mov		eax, 0
-	std
-	lodsb
-	sub		al, 48
-	mul		ebx
+	sub		eax, 48
+	imul	ebx
 	jo		StringHasError					;if overflow, number is too large
 	mov		edx, [ebp+24]
 	add		eax, [edx]
@@ -367,29 +343,30 @@ CalculateIntValue:
 	mov		[edx], eax
 	mov		eax, ebx
 	mov		ebx, 10
-	mul		ebx
+	imul	ebx
 	mov		ebx, eax
 	mov		eax, 0
-	loop	CalculateIntValue				;calculation complete whole number value
+	loop	FindInvalidChars
+
 	mov		ebx, [ebp+24]
 	mov		eax, [ebx]
-	mov		ebx, [ebp-8]
+	mov		ebx, [ebp-4]
 	imul	ebx								;multiply by sign (1:positive, -1:negative)
 	jo		StringHasError					;if overflow, number is too large
 	mov		ebx, [ebp+24]					;store in return value
 	mov		[ebx], eax
+
 	jmp		ReturnValidString
-StringHasError:								;Clear out the value and call the ReadVal procedure again. If string is valid,  recursive call will be skipped.
+StringHasError:								;Clear out the value and loop for a new string. If string is valid,  end procedure
 	mov		ebx, [ebp+24]
 	mov		eax, 0
 	mov		[ebx], eax
-	push	ebx								;push parameters recursive call
-	push	DWORD PTR [ebp+20]
-	push	DWORD PTR [ebp+20]
-	push	DWORD PTR [ebp+12]
-	push	DWORD PTR [ebp+8]
-	call	ReadVal							;Recursive call
+	mov		eax, [ebp+20]
+	mov		[ebp+16], eax
+	jmp		GetStringLoop
+
 ReturnValidString:
+
 	popad
 	mov		esp, ebp
 	pop		ebp
@@ -411,13 +388,13 @@ ReadVal ENDP
 WriteVal PROC
     push	ebp
     mov		ebp, esp
-    sub		esp, 12
-    pushad
+	pushad
+
 	mov		eax, [ebp+8]				;integer value to print
 	cmp		eax, 0
 	jge		AbsoluteValue				;for division, only work with a positive number
 	mov		ebx, -1						;the sign character will be added at the end.
-	mul		ebx
+	imul	ebx
 AbsoluteValue:
 	mov		ebx, 10						;divisor
 	mov		ecx, 0						;character counter
@@ -437,8 +414,11 @@ DividngComplete:
 	mov		eax, 45						;'-' for negative sign
 	push	eax
 	inc		ecx
+
 NoSign:
-   	mov		edi, [ebp-12]				;local string base address
+   	mov		edi, [ebp+12]				;storage string address
+	mov		eax, edi
+
 LoadStringArray:
 	pop		eax							;pop characters off the stack to eax and load them to character string
 	cld
@@ -447,11 +427,12 @@ LoadStringArray:
 	mov		eax, 0						;null character to end string
 	cld
 	stosb
-	displayString DWORD PTR [ebp-12]
+	displayString [ebp+12]
+
 	popad
 	mov		esp, ebp
 	pop		ebp
-	ret		4
+	ret		8
 WriteVal ENDP
 
 ;******************************************************************************************
@@ -486,5 +467,50 @@ StrLenExit:
 	pop		ebp
 	ret		8
 StringLength ENDP
+
+;******************************************************************************************
+; Introduction
+; Description:				This function displays 3 introductory string messages to the console
+; Receives:					3 character strings
+; Returns:					None
+; Preconditions:			The string must end in the null terminator. 
+; Registers affected:		None.
+;*********************************************************************************************
+Introduction PROC
+	push	ebp
+	mov		ebp, esp
+	pushad
+
+	displayString [ebp+16]
+	displayString [ebp+12]
+	displayString [ebp+8]
+
+	popad
+	mov		esp, ebp
+	pop		ebp
+	ret		12
+Introduction ENDP
+
+;******************************************************************************************
+; Farewell
+; Description:				This function displays 1 farewell string messages to the console
+; Receives:					1 character string
+; Returns:					None
+; Preconditions:			The string must end in the null terminator. 
+; Registers affected:		None.
+;*********************************************************************************************
+Farewell PROC
+	push	ebp
+	mov		ebp, esp
+	pushad
+
+	displayString OFFSET newLine
+	displayString [ebp+8]
+
+	popad
+	mov		esp, ebp
+	pop		ebp
+	ret		4
+Farewell ENDP
 
 END main
