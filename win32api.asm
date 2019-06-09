@@ -1,4 +1,4 @@
-TITLE Program 6a System Input/Output  
+TITLE Win32API System Input/Output  
 
 ; Author:					Robert Jones
 ; Description:				This program receives 10 character strings from the user
