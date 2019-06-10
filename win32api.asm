@@ -1,20 +1,17 @@
 TITLE Win32API System Input/Output  
 
-; Author:					Robert Jones
+; Author:				Robert Jones
 ; Description:				This program receives 10 character strings from the user
 ;					and validates the input to be compatable as a 32-bit signed integer
 ;					The program converts the strings to 32-bit signed integers and saves
 ;					them to an array. The program then displays the numbers (back as strings),
 ;					their sum, and their average (rounded down) as strings using the Win32 API calls.
-;Extra credit:				**EC #1: Number each line of user input and display a running subtotal of the user’s numbers
-;					**EC #2: ReadVal and WriteVal can handle signed 32-bit integers (first character being '-' for negative, do not use '+')
-;					**EC #5: getString and displayString macros are implemented using the Win32 API console functions (Canvas Announcement)
-;
 ;Source cite: Kip Irvine Assembly Language Chapter 10.2 "Macros Containing Code and Data"
 ;Source cite: Console inpput/output Kip Irvine Assembly Ch 11.1 Win-32 Console Programming
 
-;Constant definitions
+
 INCLUDE Irvine32.inc
+;Constant definitions
 NUMELEM = 10
 ENDL	EQU <0dh, 0ah>
 
