@@ -5,8 +5,6 @@ TITLE Composite Numbers
 ;							composite numbers [1...400]. The program then calculates and displays 
 ;							all of the composite numbers up to and including the nth number. 
 ;							The results are displayed 10 per line with at least 3 spaces between the numbers.
-;							**EC #1: the output is aligned in columns.
-;							**EC #3: the algorithm is optimized to check for composites only against prime numbers.
 ;Source Cite:				Algorithm for determining composite and prime numbers modified & adapted from:
 ;							GeeksforGeeks "Composite Numbers", https://www.geeksforgeeks.org/composite-number/
 
